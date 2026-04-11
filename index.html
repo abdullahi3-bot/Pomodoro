@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Pomodoro" />
+  <meta name="theme-color" content="#0D0D0F" />
+  <title>Pomodoro</title>
+
+  <!-- PWA Manifest inline -->
+
+  <script>
+    const manifestData = {
+      name: "Pomodoro Timer",
+      short_name: "Pomodoro",
+      start_url: "./",
+      display: "standalone",
+      background_color: "#0D0D0F",
+      theme_color: "#0D0D0F",
+      orientation: "portrait",
+      icons: [
+        { src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect width='192' height='192' rx='40' fill='%230D0D0F'/><circle cx='96' cy='96' r='70' fill='none' stroke='%23E8472A' stroke-width='8'/><text x='96' y='110' text-anchor='middle' font-size='52' fill='%23F0EDE8' font-family='Georgia'>25</text></svg>", sizes: "192x192", type: "image/svg+xml" },
+        { src: "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect width='512' height='512' rx='100' fill='%230D0D0F'/><circle cx='256' cy='256' r='190' fill='none' stroke='%23E8472A' stroke-width='20'/><text x='256' y='295' text-anchor='middle' font-size='140' fill='%23F0EDE8' font-family='Georgia'>25</text></svg>", sizes: "512x512", type: "image/svg+xml" }
+      ]
+    };
+    const blob = new Blob([JSON.stringify(manifestData)], { type: "application/json" });
+    const manifestURL = URL.createObjectURL(blob);
+    document.addEventListener("DOMContentLoaded", () => {
+      const link = document.createElement("link");
+      link.rel = "manifest";
+      link.href = manifestURL;
+      document.head.appendChild(link);
+    });
+  </script>
+
+  <!-- Apple touch icon (inline SVG as data URI) -->
+
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='%230D0D0F'/><circle cx='90' cy='90' r='65' fill='none' stroke='%23E8472A' stroke-width='7'/><text x='90' y='105' text-anchor='middle' font-size='48' fill='%23F0EDE8' font-family='Georgia'>25</text></svg>" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0D0D0F;
+      --text: #F0EDE8;
+      --accent: #E8472A;
+      --safe-top: env(safe-area-inset-top, 0px);
+      --safe-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    html, body {
+      height: 100%;
+      width: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Georgia', serif;
+      -webkit-tap-highlight-color: transparent;
+      -webkit-touch-callout: none;
+      user-select: none;
+    }
+
+    #app {
+      height: 100%;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: calc(20px + var(--safe-top)) 24px calc(20px + var(--safe-bottom));
+      position: relative;
+      overflow: hidden;
+    }
+
+    #glow {
+      position: absolute;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      width: 420px; height: 420px;
+      border-radius: 50%;
+      pointer-events: none;
+      transition: background 0.8s ease;
+    }
+
+    /* Header */
+    .header { text-align: center; margin-bottom: 28px; position: relative; z-index: 1; }
+    .header-sub {
+      font-size: 11px;
+      letter-spacing: 0.35em;
+      color: rgba(240,237,232,0.3);
+      font-style: italic;
+      margin-bottom: 5px;
+    }
+    .header-mode {
+      font-size: 13px;
+      letter-spacing: 0.2em;
+      transition: color 0.6s ease;
+    }
+
+    /* Mode tabs */
+    .mode-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 32px;
+      position: relative;
+      z-index: 1;
+    }
+    .mode-tab {
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.07);
+      color: rgba(240,237,232,0.3);
+      padding: 6px 14px;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 10px;
+      letter-spacing: 0.15em;
+      font-family: 'Georgia', serif;
+      transition: all 0.3s ease;
+      -webkit-appearance: none;
+    }
+    .mode-tab.active {
+      background: rgba(255,255,255,0.08);
+      border-color: rgba(255,255,255,0.15);
+      color: var(--text);
+    }
+
+    /* Ring */
+    .ring-wrap {
+      position: relative;
+      width: 260px; height: 260px;
+      margin-bottom: 28px;
+      z-index: 1;
+      transition: transform 0.8s ease;
+    }
+    .ring-wrap.pulse { animation: pulseAnim 0.8s ease; }
+    @keyframes pulseAnim {
+      0% { transform: scale(1); }
+      40% { transform: scale(1.04); }
+      100% { transform: scale(1); }
+    }
+    #ring-svg { transform: rotate(-90deg); }
+    #ring-bg { transition: none; }
+    #ring-fg { transition: stroke-dasharray 0.5s ease, stroke 0.6s ease; }
+
+    .ring-center {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+    .time-display {
+      font-size: 54px;
+      font-weight: 300;
+      letter-spacing: -2px;
+      line-height: 1;
+    }
+    .time-colon { opacity: 0.4; font-size: 40px; }
+    .time-status {
+      margin-top: 8px;
+      font-size: 10px;
+      letter-spacing: 0.2em;
+      color: rgba(240,237,232,0.3);
+      font-style: italic;
+    }
+
+    /* Controls */
+    .controls {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+      margin-bottom: 32px;
+      z-index: 1;
+    }
+    .btn-secondary {
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      background: transparent;
+      border: 1px solid rgba(255,255,255,0.1);
+      color: rgba(240,237,232,0.4);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+      transition: all 0.2s;
+      font-family: 'Georgia', serif;
+      -webkit-appearance: none;
+    }
+    .btn-secondary:active { transform: scale(0.92); background: rgba(255,255,255,0.05); }
+
+    #btn-play {
+      width: 72px; height: 72px;
+      border-radius: 50%;
+      border: none;
+      color: #fff;
+      cursor: pointer;
+      font-size: 22px;
+      display: flex; align-items: center; justify-content: center;
+      transition: all 0.3s ease;
+      -webkit-appearance: none;
+    }
+    #btn-play:active { transform: scale(0.94); }
+
+    /* Session dots */
+    .dots {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      z-index: 1;
+    }
+    .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: rgba(240,237,232,0.1);
+      transition: all 0.4s ease;
+    }
+    .dot.done { background: rgba(240,237,232,0.4); }
+    .dot.current { }
+
+    /* Stats */
+    .stats {
+      font-size: 11px;
+      letter-spacing: 0.15em;
+      color: rgba(240,237,232,0.25);
+      font-style: italic;
+      z-index: 1;
+    }
+
+    /* Service worker install prompt */
+    #install-banner {
+      display: none;
+      position: fixed;
+      bottom: calc(16px + var(--safe-bottom));
+      left: 16px; right: 16px;
+      background: rgba(30,30,32,0.95);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 14px;
+      padding: 14px 16px;
+      font-size: 12px;
+      letter-spacing: 0.05em;
+      color: rgba(240,237,232,0.7);
+      z-index: 999;
+      backdrop-filter: blur(10px);
+      text-align: center;
+      line-height: 1.6;
+    }
+  </style>
+
+</head>
+<body>
+<div id="app">
+  <div id="glow"></div>
+
+  <div class="header">
+    <div class="header-sub">pomodoro</div>
+    <div class="header-mode" id="mode-label">FOCUS</div>
+  </div>
+
+  <div class="mode-tabs">
+    <button class="mode-tab active" data-mode="focus">focus</button>
+    <button class="mode-tab" data-mode="short">short</button>
+    <button class="mode-tab" data-mode="long">long</button>
+  </div>
+
+  <div class="ring-wrap" id="ring-wrap">
+    <svg id="ring-svg" width="260" height="260">
+      <circle id="ring-bg" cx="130" cy="130" r="120"
+        fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="6"/>
+      <circle id="ring-fg" cx="130" cy="130" r="120"
+        fill="none" stroke="#E8472A" stroke-width="6"
+        stroke-linecap="round"/>
+    </svg>
+    <div class="ring-center">
+      <div class="time-display">
+        <span id="mins">25</span><span class="time-colon">:</span><span id="secs">00</span>
+      </div>
+      <div class="time-status" id="status-label">ready</div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn-secondary" id="btn-reset" title="Reset">↺</button>
+    <button id="btn-play">▶</button>
+    <button class="btn-secondary" id="btn-skip" title="Skip">⏭</button>
+  </div>
+
+  <div class="dots">
+    <div class="dot current" id="dot-1"></div>
+    <div class="dot" id="dot-2"></div>
+    <div class="dot" id="dot-3"></div>
+    <div class="dot" id="dot-4"></div>
+  </div>
+
+  <div class="stats" id="stats-label">no sessions completed yet</div>
+</div>
+
+<div id="install-banner"></div>
+
+<script>
+  const MODES = {
+    focus: { label: "FOCUS",       duration: 25 * 60, color: "#E8472A" },
+    short: { label: "SHORT BREAK", duration:  5 * 60, color: "#2A7A4B" },
+    long:  { label: "LONG BREAK",  duration: 20 * 60, color: "#1A5C8A" },
+  };
+
+  let mode = "focus";
+  let timeLeft = MODES.focus.duration;
+  let running = false;
+  let session = 1;       // 1–4 within current cycle
+  let completedToday = 0;
+  let intervalId = null;
+
+  const CIRC = 2 * Math.PI * 120;
+
+  // Elements
+  const el = id => document.getElementById(id);
+  const minsEl    = el("mins");
+  const secsEl    = el("secs");
+  const statusEl  = el("status-label");
+  const modeLabelEl = el("mode-label");
+  const ringFg    = el("ring-fg");
+  const glowEl    = el("glow");
+  const statsEl   = el("stats-label");
+  const ringWrap  = el("ring-wrap");
+  const btnPlay   = el("btn-play");
+  const tabs      = document.querySelectorAll(".mode-tab");
+
+  function pad(n) { return String(n).padStart(2, "0"); }
+
+  function render() {
+    const m = MODES[mode];
+    const progress = timeLeft / m.duration;
+    const dash = CIRC * progress;
+
+    minsEl.textContent = pad(Math.floor(timeLeft / 60));
+    secsEl.textContent = pad(timeLeft % 60);
+    statusEl.textContent = running ? "in session" : timeLeft === m.duration ? "ready" : "paused";
+    modeLabelEl.textContent = m.label;
+    modeLabelEl.style.color = m.color;
+
+    ringFg.setAttribute("stroke", m.color);
+    ringFg.setAttribute("stroke-dasharray", `${dash} ${CIRC}`);
+
+    glowEl.style.background = `radial-gradient(circle, ${m.color}18 0%, transparent 70%)`;
+    btnPlay.style.background = m.color;
+    btnPlay.style.boxShadow = `0 0 28px ${m.color}55`;
+    btnPlay.textContent = running ? "⏸" : "▶";
+
+    // Dots
+    for (let i = 1; i <= 4; i++) {
+      const dot = el(`dot-${i}`);
+      dot.className = "dot";
+      dot.style.background = "";
+      dot.style.boxShadow = "";
+      if (mode === "focus") {
+        if (i < session) {
+          dot.classList.add("done");
+        } else if (i === session) {
+          dot.classList.add("current");
+          dot.style.background = m.color;
+          dot.style.boxShadow = `0 0 8px ${m.color}`;
+        }
+      } else {
+        // On break, show prior completed dots
+        const posInCycle = ((session - 2 + 4) % 4) + 1;
+        if (i <= posInCycle) dot.classList.add("done");
+      }
+    }
+
+    statsEl.textContent = completedToday === 0
+      ? "no sessions completed yet"
+      : `${completedToday} session${completedToday > 1 ? "s" : ""} completed today`;
+  }
+
+  function playChime(isBreakEnd) {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const freqs = isBreakEnd ? [784, 659, 523] : [523, 659, 784];
+      freqs.forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain); gain.connect(ctx.destination);
+        osc.type = "sine";
+        osc.frequency.value = freq;
+        const t = ctx.currentTime + i * 0.25;
+        gain.gain.setValueAtTime(0, t);
+        gain.gain.linearRampToValueAtTime(0.3, t + 0.05);
+        gain.gain.linearRampToValueAtTime(0, t + 0.5);
+        osc.start(t); osc.stop(t + 0.6);
+      });
+    } catch(e) {}
+  }
+
+  function pulse() {
+    ringWrap.classList.add("pulse");
+    setTimeout(() => ringWrap.classList.remove("pulse"), 800);
+  }
+
+  function switchMode(newMode, resetTime = true) {
+    mode = newMode;
+    if (resetTime) timeLeft = MODES[newMode].duration;
+    running = false;
+    clearInterval(intervalId);
+    tabs.forEach(t => {
+      t.classList.toggle("active", t.dataset.mode === newMode);
+    });
+    render();
+  }
+
+  function advance() {
+    clearInterval(intervalId);
+    running = false;
+
+    if (mode === "focus") {
+      completedToday++;
+      playChime(false);
+      pulse();
+      const posInCycle = session % 4;
+      session++;
+      if (posInCycle === 0) {
+        switchMode("long");
+      } else {
+        switchMode("short");
+      }
+    } else {
+      playChime(true);
+      pulse();
+      switchMode("focus");
+    }
+  }
+
+  function tick() {
+    if (timeLeft <= 1) {
+      timeLeft = 0;
+      render();
+      advance();
+      return;
+    }
+    timeLeft--;
+    render();
+  }
+
+  // Play/pause
+  btnPlay.addEventListener("click", () => {
+    running = !running;
+    if (running) {
+      intervalId = setInterval(tick, 1000);
+    } else {
+      clearInterval(intervalId);
+    }
+    render();
+  });
+
+  // Reset
+  el("btn-reset").addEventListener("click", () => {
+    clearInterval(intervalId);
+    running = false;
+    timeLeft = MODES[mode].duration;
+    render();
+  });
+
+  // Skip
+  el("btn-skip").addEventListener("click", advance);
+
+  // Mode tabs
+  tabs.forEach(tab => {
+    tab.addEventListener("click", () => switchMode(tab.dataset.mode));
+  });
+
+  // Prevent sleep on iOS (no-op audio ping every 20s)
+  setInterval(() => {
+    try {
+      if (!running) return;
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      gain.gain.setValueAtTime(0.001, ctx.currentTime);
+      osc.start(ctx.currentTime);
+      osc.stop(ctx.currentTime + 0.01);
+    } catch(e) {}
+  }, 20000);
+
+  // Service worker for offline use
+  if ('serviceWorker' in navigator) {
+    const swCode = `
+      const CACHE = 'pomodoro-v1';
+      self.addEventListener('install', e => {
+        e.waitUntil(caches.open(CACHE).then(c => c.addAll(['/'])));
+        self.skipWaiting();
+      });
+      self.addEventListener('fetch', e => {
+        e.respondWith(caches.match(e.request).then(r => r || fetch(e.request)));
+      });
+    `;
+    const swBlob = new Blob([swCode], { type: 'application/javascript' });
+    const swURL = URL.createObjectURL(swBlob);
+    navigator.serviceWorker.register(swURL).catch(() => {});
+  }
+
+  // Initial render
+  render();
+</script>
+
+</body>
+</html>
